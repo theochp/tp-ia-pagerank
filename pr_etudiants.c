@@ -381,9 +381,8 @@ VEC *vm_multiply(const VEC *vec, const MAT *mat)
   rvec = v_get(vec->dim);
 
   for(i = 0; i < vec->dim; ++i) {
-    rvec->e[i] = 0;
     for(j = 0; j < mat->m; ++j) {
-      rvec->e[i] += vec->e[i] * mat->e[j][i];
+      rvec->e[j] += vec->e[i] * mat->e[i][j];
     }
   }
 
@@ -405,40 +404,45 @@ VEC * v_copy(VEC *dst, VEC *src)
 
 int main()
 {
+  int i,j;
   FILE *fp;
-  MAT *M;
-  VEC *R;
+  MAT *M, *H;
+  VEC *R, *TEMP;
 
-  fp = fopen( "t.dat", "r" );
+  fp = fopen( "g.dat", "r" );
   M = m_input( fp );
   fclose( fp );
   m_output( stdout, M );
 
+  // generate H matrix
+  H = m_get(M->m, M->n);
+  for(i = 0; i < M->m; ++i) {
+    int n_ones = 0;
+    for(j = 0; j < M->n; ++j) {
+      if(M->e[i][j] == 1)
+        n_ones++;
+    }
+    for(j = 0; j < M->n; ++j) {
+      if(M->e[i][j] == 1)
+        H->e[i][j] = 1.0 / n_ones;
+    }
+  }
+
+  // generate R vector
   R = v_get(M->m);
-  
-  R->e[0] = 0.25;
-  R->e[1] = 0.25;
-  R->e[2] = 0.25;
-  R->e[3] = 0.25;
-  
-  v_free( // free the result vector
-    v_copy(R,  // copy the result into R
-      vm_multiply(R, M)
-    )
-  );
+  for(i = 0; i< M->m; ++i) {
+    R->e[i] = 1.0/M->m;
+  }
+
+  for(i = 0; i < 1000; ++i) {
+    TEMP = R;
+    R = vm_multiply(R, H);
+    v_free(TEMP);
+  }
 
   v_output(stdout, R);
   
   m_free( M );
-
-  /* Working with sparse matrix */
-  /*SMAT *SM;
-  fp = fopen( "genetic.dat", "r" );
-  SM = sm_input( fp );
-  fclose( fp );
-  fp = fopen( "test.dat", "w" );
-  sm_output( fp, SM );
-  sm_free( SM );*/
-
+  v_free(R);
   return 0;
 }
