@@ -406,7 +406,7 @@ int main()
 {
   int i,j;
   FILE *fp;
-  MAT *M, *H, *S;
+  MAT *M, *H, *S, *E;
   VEC *R, *TEMP;
 
   fp = fopen( "g.dat", "r" );
@@ -444,6 +444,16 @@ int main()
     }
   }
 
+  E = m_get(S->m, S->n);
+  // generate E matrix
+  float alpha = 0.85;
+  for(i = 0; i < S->m; ++i) {
+    for(j = 0; j < S->n; ++j) {
+      E->e[i][j] = 
+        (alpha * S->e[i][j]) + (1.0 - alpha) * (1.0 / S->n);
+    }
+  }
+
   // generate R vector
   R = v_get(M->m);
   for(i = 0; i< M->m; ++i) {
@@ -452,7 +462,7 @@ int main()
 
   for(i = 0; i < 1000; ++i) {
     TEMP = R;
-    R = vm_multiply(R, S);
+    R = vm_multiply(R, E);
     v_free(TEMP);
   }
 
