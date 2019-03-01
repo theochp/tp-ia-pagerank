@@ -389,6 +389,25 @@ VEC *vm_multiply(const VEC *vec, const MAT *mat)
   return rvec;
 }
 
+VEC *vsm_multiply(const VEC *vec, const SMAT *mat)
+{
+  int i;
+  int j;
+  VEC *rvec;
+  
+  rvec = v_get(vec->dim);
+
+  for(i = 0; i < vec->dim; ++i) {
+    SROW *row = &(mat->row[i]);
+    for(j = 0; j < row->nnz; ++j) {
+      int idx = row->col[j];
+      rvec->e[idx] += vec->e[i] * row->val[j];
+    }
+  }
+
+  return rvec;
+}
+
 /* v_copy -- copies src to dst
    Precondition: both vectors are allocated,
    returns the source vector */
@@ -406,51 +425,18 @@ int main()
 {
   int i,j;
   FILE *fp;
-  MAT *M, *H, *S, *E;
-  VEC *R, *TEMP;
+  SMAT *M;
+  VEC *R, *RH;
 
-  fp = fopen( "g.dat", "r" );
-  M = m_input( fp );
+  fp = fopen( "gsm.dat", "r" );
+  M = sm_input( fp );
   fclose( fp );
-  m_output( stdout, M );
 
   // generate H matrix
-  H = m_get(M->m, M->n);
-  for(i = 0; i < M->m; ++i) {
-    int n_ones = 0;
-    for(j = 0; j < M->n; ++j) {
-      if(M->e[i][j] == 1)
-        n_ones++;
-    }
-    for(j = 0; j < M->n; ++j) {
-      if(M->e[i][j] == 1)
-        H->e[i][j] = 1.0 / n_ones;
-    }
-  }
-
-  // generate S matrix
-  S = m_get(H->m, H->n);
-  for(i = 0; i < H->m; ++i) {
-    double sum = 0;
-    for(j = 0; j < H->n; ++j) {
-      sum += H->e[i][j];
-    }
-    for(j = 0; j < H->n; ++j) {
-      if(sum != 1) {
-        S->e[i][j] = 1.0 / H->m;
-      } else {
-        S->e[i][j] = H->e[i][j];
-      }
-    }
-  }
-
-  E = m_get(S->m, S->n);
-  // generate E matrix
-  float alpha = 0.85;
-  for(i = 0; i < S->m; ++i) {
-    for(j = 0; j < S->n; ++j) {
-      E->e[i][j] = 
-        (alpha * S->e[i][j]) + (1.0 - alpha) * (1.0 / S->n);
+  for(i = 0; i < M->n; ++i) {
+    SROW* row = &(M->row[i]);
+    for(j = 0; j < row->nnz; ++j) {
+      row->val[j] = 1.0/row->nnz;
     }
   }
 
@@ -459,16 +445,32 @@ int main()
   for(i = 0; i< M->m; ++i) {
     R->e[i] = 1.0/M->m;
   }
+  v_output(stdout, R);
 
-  for(i = 0; i < 1000; ++i) {
-    TEMP = R;
-    R = vm_multiply(R, E);
-    v_free(TEMP);
+  const float alpha = 0.85;
+  for(int _ = 0; _ < 1000; ++_) {
+    RH = vsm_multiply(R, M);
+    double factor = 0.0;
+    for(i = 0; i < R->dim; ++i) {
+      if(M->row[i].nnz == 0) {
+        factor += R->e[i];
+      }
+    }
+    factor *= alpha;
+    factor += 1-alpha;
+    for(i = 0; i < R->dim; ++i) {
+      int a = (M->row[i].nnz == 0) ? 1 : 0;
+      RH->e[i] = (alpha * RH->e[i]) +
+        (factor * 1.0/R->dim);
+    }
+    v_free(R);
+    R = RH;
   }
 
   v_output(stdout, R);
+
   
-  m_free( M );
+  sm_free( M );
   v_free(R);
   return 0;
 }
